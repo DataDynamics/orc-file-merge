@@ -2,9 +2,6 @@
 
 ## Spark
 
-### 
-
-
 ### Python
 
 ```python
