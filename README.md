@@ -104,6 +104,57 @@ df_single = df_transformed.coalesce(1)
 spark.stop()
 ```
 
+```python
+from pyspark.sql import SparkSession
+
+# Spark 세션 생성 및 Hive, Iceberg 카탈로그 설정
+spark = SparkSession.builder \
+    .appName("Load ORC, Transform with SQL, and Insert into Iceberg") \
+    .enableHiveSupport() \
+    # Iceberg Hadoop 카탈로그 설정
+    .config("spark.sql.catalog.ice", "org.apache.iceberg.spark.SparkCatalog") \
+    .config("spark.sql.catalog.ice.type", "hadoop") \
+    .config("spark.sql.catalog.ice.warehouse", "hdfs:///iceberg_warehouse") \
+    .getOrCreate()
+
+# Hive 외부 테이블명
+table_name = "mydb.external_orc_table"
+
+# 1. Hive 테이블의 HDFS 위치 조회
+desc_df = spark.sql(f"DESCRIBE FORMATTED {table_name}")
+location = (
+    desc_df.filter(desc_df.col_name == "Location")
+           .select("data_type")
+           .first()[0]
+)
+
+# 2. 서브디렉토리 재귀 스캔 활성화
+spark.conf.set("spark.hadoop.mapreduce.input.fileinputformat.input.dir.recursive", "true")
+
+# 3. ORC 파일 로드 및 임시 뷰 등록
+df = spark.read.format("orc").load(location)
+df.createOrReplaceTempView("ext_orc_view")
+
+# 4. Spark SQL 실행 (필터링 및 컬럼 조정 예시)
+#    원하는 SQL 쿼리로 데이터를 가공합니다
+query = """
+SELECT
+  old_col   AS new_col,
+  other_col,
+  event_time
+FROM ext_orc_view
+WHERE event_time >= '2025-01-01'
+"""
+result_df = spark.sql(query)
+
+# 5. Iceberg 테이블에 INSERT
+#    카탈로그 'ice', 데이터베이스 'iceberg_db', 테이블 'merged_table'
+result_df.writeTo("ice.iceberg_db.merged_table") \
+         .using("iceberg") \
+         .append()
+
+spark.stop()
+```
 ## References
 
 * Online ORC File Viewer (https://dataconverter.io/)
