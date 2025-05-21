@@ -32,7 +32,6 @@ public class MergeOrcFiles {
         conf.set("hadoop.security.authorization", "false");
 
         UserGroupInformation.setConfiguration(conf);
-f
         FileSystem fs = FileSystem.get(conf);
 
         // 재귀적으로 ORC 파일 목록 조회
